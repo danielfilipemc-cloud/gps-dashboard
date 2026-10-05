@@ -998,8 +998,8 @@ if (typeof pdfjsLib !== 'undefined') {
 }
 </script>
 <script>
-const SUPABASE_URL = 'https://lwujmvvphbxwdowkrzye.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3dWptdnZwaGJ4d2Rvd2tyenllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MTU5MjMsImV4cCI6MjA5NDQ5MTkyM30.lf1FKZk4pxRbiaNRRABQuDvLWUuPjrXRVumxoy6-uAI';
+const SUPABASE_URL = 'https://gbomkxltsrtdssxeoshz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdib21reGx0c3J0ZHNzeGVvc2h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxNjI0NzYsImV4cCI6MjEwMzczODQ3Nn0.Kb5kmJJSlJIaK9U9au8h5taUGC1XrODmu91kJbL4TmQ';
 let _sb = null;
 function getSB() {
   if (!_sb) _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1251,17 +1251,24 @@ async function loadFromSupabase() {
       if (row.key === 'fleet_edits_v2') {
         const localEdits = JSON.parse(localStorage.getItem('fleet_edits_v2') || '{}');
         const cloudEdits = row.value || {};
-        if (localEdits && Object.keys(localEdits).length > 0) {
-          // Merge por posição: local ganha em todos os campos (preserva galera/notes/reboque)
-          const merged = {};
-          const allIdxs = new Set([...Object.keys(cloudEdits), ...Object.keys(localEdits)]);
-          allIdxs.forEach(idx => {
-            merged[idx] = Object.assign({}, cloudEdits[idx] || {}, localEdits[idx] || {});
+        // A cloud é a fonte de verdade para estados operacionais.
+        // Dados locais antigos não podem ressuscitar Oficina/Sinistro/GPS já corrigidos.
+        const operationalFields = new Set([
+          'obs','gps','porta','temp','officeSource','officeReportAt','officeReportFile',
+          'officeReportConflict','officeClearedReason','officeClearedAt'
+        ]);
+        const merged = {};
+        const allKeys = new Set([...Object.keys(localEdits || {}), ...Object.keys(cloudEdits || {})]);
+        allKeys.forEach(k => {
+          const local = localEdits[k] || {};
+          const cloud = cloudEdits[k] || {};
+          const base = Object.assign({}, local, cloud);
+          Object.keys(local).forEach(field => {
+            if (!operationalFields.has(field) && cloud[field] === undefined) base[field] = local[field];
           });
-          localStorage.setItem('fleet_edits_v2', JSON.stringify(merged));
-        } else {
-          localStorage.setItem('fleet_edits_v2', JSON.stringify(cloudEdits));
-        }
+          merged[k] = base;
+        });
+        localStorage.setItem('fleet_edits_v2', JSON.stringify(merged));
         return;
       }
       if (row.key === 'fleet_registos_v2') {
